@@ -8,13 +8,19 @@
 #include <stdbool.h>
 #include <mqueue.h>
 #include <string.h>
+#include "restaurante.h"
+#define  MQ_NAME "/mq_cola_queue"
 
 pid_t pid_sala, pid_cocina;
 
+struct mq_attr attributes = {
+    .mq_flags = 0,
+    .mq_maxmsg = 15,
+    .mq_msgsize = sizeof(Comanda),
+    .mq_curmsgs = 0
+};
 
-typedef struct{
-    char cadena[200];
-} Comanda;
+
 
 int tiempo_aleatorio(int min, int max) {
     return rand() % (max - min + 1) + min;
@@ -58,6 +64,13 @@ void* emplatar(void* arg) {
 
 int main(int argc, char* argv[]) {
 
+   
+    mqd_t queue = mq_open(MQ_NAME , O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR, &attributes);
+    Comanda pedido;
+    strcpy(pedido.msg,"Una de champiñones");
+    mq_send(queue, (char *)&pedido, sizeof(pedido), 1);
+
+
     pid_sala = fork();
     pthread_t t1, t2, t3;
 
@@ -72,20 +85,20 @@ int main(int argc, char* argv[]) {
             /* Proceso Cocina */
             printf("[Cocina] Comienzo de la preparación de platos...\n");
 
-            if( pthread_create(&t1, NULL, &preparar_ingredientes, NULL) ) !=0 {
-                return 1
+            if( pthread_create(&t1, NULL, &preparar_ingredientes, NULL)  != 0) {
+                return 1;
             };
-            pthread_join(t1, NULL)
+            pthread_join(t1, NULL);
 
-            if( pthread_create(&t2, NULL, &cocinar, NULL) ) != 0 {
-                return 2
+            if( pthread_create(&t2, NULL, &cocinar, NULL) != 0) {
+                return 2;
             };
-            pthread_join(t2,NULL)
+            pthread_join(t2,NULL);
 
-            if( pthread_create(&t3, NULL, &emplatar, NULL) ) != 0{
-                return 3
+            if( pthread_create(&t3, NULL, &emplatar, NULL) != 0) {
+                return 3;
             }
-            pthread_join(t2,NULL)
+            pthread_join(t2,NULL);
 
 
 

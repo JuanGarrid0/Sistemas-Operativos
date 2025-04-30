@@ -13,6 +13,6 @@ all: $(EXEC)
 $(EXEC): $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@ -lrt
 clean:
 	rm -f * $(EXEC)

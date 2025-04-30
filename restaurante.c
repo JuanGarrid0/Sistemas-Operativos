@@ -11,6 +11,11 @@
 
 pid_t pid_sala, pid_cocina;
 
+
+typedef struct{
+    char cadena[200];
+} Comanda;
+
 int tiempo_aleatorio(int min, int max) {
     return rand() % (max - min + 1) + min;
 }
@@ -54,6 +59,7 @@ void* emplatar(void* arg) {
 int main(int argc, char* argv[]) {
 
     pid_sala = fork();
+    pthread_t t1, t2, t3;
 
     if (pid_sala != 0) {
         pid_cocina = fork();
@@ -65,6 +71,21 @@ int main(int argc, char* argv[]) {
         } else {
             /* Proceso Cocina */
             printf("[Cocina] Comienzo de la preparación de platos...\n");
+
+            if( pthread_create(&t1, NULL, &preparar_ingredientes, NULL) ) !=0 {
+                return 1
+            };
+            pthread_join(t1, NULL)
+
+            if( pthread_create(&t2, NULL, &cocinar, NULL) ) != 0 {
+                return 2
+            };
+            pthread_join(t2,NULL)
+
+            if( pthread_create(&t3, NULL, &emplatar, NULL) ) != 0{
+                return 3
+            }
+            pthread_join(t2,NULL)
 
 
 
@@ -83,7 +104,7 @@ int main(int argc, char* argv[]) {
 
             num_comanda++;
 
-        }
+        }   
     }
 
     exit(0);

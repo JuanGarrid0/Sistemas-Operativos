@@ -4,7 +4,7 @@ CC = gcc
 CFLAGS = -Wall -g
 
 SRC = restaurante.c
-OBJ = $(SRC:.c=.o)
+OBJ = $(SRC)
 EXEC = restaurante
 
 
@@ -15,4 +15,4 @@ $(EXEC): $(OBJ)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 clean:
-	rm -f *.o $(EXEC)
+	rm -f * $(EXEC)

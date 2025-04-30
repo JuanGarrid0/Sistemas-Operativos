@@ -1,5 +1,18 @@
-restaurante: restaurante.c
-	gcc -o restaurante restaurante.c
 
+CC = gcc
+
+CFLAGS = -Wall -g
+
+SRC = restaurante.c
+OBJ = $(SRC:.c=.o)
+EXEC = restaurante
+
+
+all: $(EXEC)
+
+$(EXEC): $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 clean:
-	rm -f
+	rm -f *.o $(EXEC)

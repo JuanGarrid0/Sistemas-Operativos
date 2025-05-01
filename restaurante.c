@@ -97,18 +97,18 @@ int main(int argc, char* argv[]) {
             if( pthread_create(&t1, NULL, &preparar_ingredientes, pedido.msg)  != 0) {
                 return 1;
             };
-            pthread_join(t1, NULL);
 
 
             if( pthread_create(&t2, NULL, &cocinar, NULL) != 0) {
                 return 2;
             };
-            pthread_join(t2, NULL);
 
 
             if( pthread_create(&t3, NULL, &emplatar, NULL) != 0) {
                 return 3;
             };
+            pthread_join(t1, NULL);
+            pthread_join(t2, NULL);
             pthread_join(t3, NULL);
 
 

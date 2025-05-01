@@ -11,7 +11,7 @@ EXEC = restaurante
 all: $(EXEC)
 
 $(EXEC): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ -lrt
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@ -lrt
 clean:

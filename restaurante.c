@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
     mq_send(queue, (char *)&pedido, sizeof(pedido), 1);
 
     sem_init(&sem_preparado, 0, 1);
-    sem_init(&sem_cocinado, 0, 1);
+    sem_init(&sem_cocinado, 0, 0);
     sem_init(&sem_emplatado, 0, 0);
     pid_sala = fork();
     srand(time(NULL));

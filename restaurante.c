@@ -86,7 +86,10 @@ int main(int argc, char* argv[]) {
         pid_cocina = fork();
         if (pid_cocina != 0) {
 		/* Proceso padre */
-      
+            waitpid(pid_cocina, NULL,0);
+            waitpid(pid_sala,NULL, 0);
+
+
 
 
         } else {
@@ -119,7 +122,6 @@ int main(int argc, char* argv[]) {
             free (buffer_pedido);
             mq_close (queue);
             mq_unlink(MQ_NAME);
-
         }
     } else {
         /* Proceso Sala */
@@ -143,7 +145,6 @@ int main(int argc, char* argv[]) {
 
 
             num_comanda++;
-
         }   
     }
 

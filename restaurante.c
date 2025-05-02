@@ -12,19 +12,22 @@
 #include "restaurante.h"
 #include <fcntl.h>
 #include <sys/stat.h>
-#define  MQ_NAME "/mq_cola_queue"
+#define  MQ_NAME "/mY_queue"
+#define BUFF_SIZE 8192
 
 pid_t pid_sala, pid_cocina;
-sem_t sem_preparado;
-sem_t sem_cocinado;
-sem_t sem_emplatado;
+sem_t sem_preparado, sem_cocinado, sem_emplatado;
+mqd_t queue;
+Comanda pedido;
+pthread_t t1, t2, t3;
 struct mq_attr attributes = {
     .mq_flags = 0,
-    .mq_maxmsg = 15,
+    .mq_maxmsg = 10,
     .mq_msgsize = sizeof(Comanda),
     .mq_curmsgs = 0
 };
 
+char buffer_pedido[BUFF_SIZE];
  
 
 int tiempo_aleatorio(int min, int max) {
@@ -71,10 +74,7 @@ void* emplatar(void* arg) {
 }
 
 int main(int argc, char* argv[]) {
-    mqd_t queue = mq_open(MQ_NAME , O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR, &attributes);
-    Comanda pedido;
-    strcpy(pedido.msg,"Una de champiñones");
-    mq_send(queue, (char *)&pedido, sizeof(pedido), 1);
+
 
     sem_init(&sem_preparado, 0, 1);
     sem_init(&sem_cocinado, 0, 0);
@@ -91,10 +91,13 @@ int main(int argc, char* argv[]) {
 
         } else {
             /* Proceso Cocina */
-            pthread_t t1, t2, t3;
-          
+            queue = mq_open(MQ_NAME ,O_RDONLY);
+            mq_receive (queue, buffer_pedido, attributes.mq_msgsize, 0);
+            printf("El pedido es %s \n",buffer_pedido);
+            
+
             printf("[Cocina] Comienzo de la preparación de platos...\n");
-            if( pthread_create(&t1, NULL, &preparar_ingredientes, pedido.msg)  != 0) {
+            if( pthread_create(&t1, NULL, &preparar_ingredientes, buffer_pedido)  != 0) {
                 return 1;
             };
 
@@ -107,18 +110,32 @@ int main(int argc, char* argv[]) {
             if( pthread_create(&t3, NULL, &emplatar, NULL) != 0) {
                 return 3;
             };
+
+            mq_close (queue);
+
             pthread_join(t1, NULL);
             pthread_join(t2, NULL);
             pthread_join(t3, NULL);
-
+            free (buffer_pedido);
+            mq_close (queue);
+            mq_unlink(MQ_NAME);
 
         }
     } else {
         /* Proceso Sala */
+        queue = mq_open(MQ_NAME , O_CREAT | O_WRONLY, 0664 , &attributes);
         printf("[Sala] Inicio de la gestión de comandas...\n");
+        if (queue == -1){
+            perror ("mq_open");
+            exit (1);
+        }
+        strcpy(pedido.msg,"Una de champiñones");
+        mq_send(queue, (char *)&pedido, sizeof(pedido), 1);
+        mq_close(queue);
 
 	int num_comanda = 0;
-
+        mq_getattr (queue, &attributes);                                //borrable
+        printf ("%ld pedidos en cocina.\n", attributes.mq_curmsgs);      //borrable, saca numero de mensajes en cola
         while (1) {
 
             sleep(tiempo_aleatorio(5, 10));

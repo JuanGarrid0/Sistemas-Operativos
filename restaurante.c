@@ -12,9 +12,9 @@
 #include "restaurante.h"
 #include <fcntl.h>
 #include <sys/stat.h>
-#define  MQ_NAME "/mY_queue"
+#define  MQ_NAME "/my_queue"
 #define BUFF_SIZE 8192
-
+ 
 pid_t pid_sala, pid_cocina;
 sem_t sem_preparado, sem_cocinado, sem_emplatado;
 mqd_t queue;
@@ -26,7 +26,7 @@ struct mq_attr attributes = {
     .mq_msgsize = sizeof(Comanda),
     .mq_curmsgs = 0
 };
-
+ 
 char buffer_pedido[BUFF_SIZE];
  
 
@@ -73,6 +73,11 @@ void* emplatar(void* arg) {
     }
 }
 
+void handle(int sig){
+    printf("Arribaderchi\n");
+    exit(0);
+}
+
 int main(int argc, char* argv[]) {
 
 
@@ -86,6 +91,17 @@ int main(int argc, char* argv[]) {
         pid_cocina = fork();
         if (pid_cocina != 0) {
 		/* Proceso padre */
+            struct sigaction sa;
+            memset(&sa, 0, sizeof(sa));
+            sa.sa_handler = handle;  // sin '&' si ya es un nombre de función
+            sigemptyset(&sa.sa_mask);
+            sa.sa_flags = 0;
+            
+            if (sigaction(SIGINT, &sa, NULL) == -1) {
+                perror("sigaction");
+                exit(EXIT_FAILURE);
+            }
+
             waitpid(pid_cocina, NULL,0);
             waitpid(pid_sala,NULL, 0);
 
@@ -116,12 +132,16 @@ int main(int argc, char* argv[]) {
 
             mq_close (queue);
 
-            pthread_join(t1, NULL);
-            pthread_join(t2, NULL);
             pthread_join(t3, NULL);
+            pthread_join(t2, NULL);
+            pthread_join(t1, NULL);
+
+
             free (buffer_pedido);
             mq_close (queue);
             mq_unlink(MQ_NAME);
+            //kill(getppid(), SIGUSR1);
+
         }
     } else {
         /* Proceso Sala */
@@ -134,7 +154,7 @@ int main(int argc, char* argv[]) {
         strcpy(pedido.msg,"Una de champiñones");
         mq_send(queue, (char *)&pedido, sizeof(pedido), 1);
         mq_close(queue);
-
+ 
 	int num_comanda = 0;
         mq_getattr (queue, &attributes);                                //borrable
         printf ("%ld pedidos en cocina.\n", attributes.mq_curmsgs);      //borrable, saca numero de mensajes en cola
@@ -145,6 +165,8 @@ int main(int argc, char* argv[]) {
 
 
             num_comanda++;
+            //kill(getppid(), SIGUSR1);
+
         }   
     }
 

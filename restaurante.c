@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
 		/* Proceso padre */
             struct sigaction sa;
             memset(&sa, 0, sizeof(sa));
-            sa.sa_handler = handle;  // sin '&' si ya es un nombre de función
+            sa.sa_handler = handle; 
             sigemptyset(&sa.sa_mask);
             sa.sa_flags = 0;
             

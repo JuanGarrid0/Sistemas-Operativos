@@ -27,8 +27,7 @@ struct mq_attr attributes = {
     .mq_curmsgs = 0
 };
  
-char buffer_pedido[BUFF_SIZE];
- 
+char *buffer_pedido;
 
 int tiempo_aleatorio(int min, int max) {
     return rand() % (max - min + 1) + min;
@@ -74,13 +73,24 @@ void* emplatar(void* arg) {
 }
 
 void handle(int sig){
-    printf("Arribaderchi\n");
+
+    pthread_join(t3, NULL);
+    pthread_join(t2, NULL);
+    pthread_join(t1, NULL);
+
+    mq_close (queue);
+    mq_unlink(MQ_NAME); 
+
+    sem_destroy(&sem_cocinado);
+    sem_destroy(&sem_emplatado);
+    sem_destroy(&sem_preparado);
+
     exit(0);
 }
 
 int main(int argc, char* argv[]) {
 
-
+    buffer_pedido = malloc(1024);
     sem_init(&sem_preparado, 0, 1);
     sem_init(&sem_cocinado, 0, 0);
     sem_init(&sem_emplatado, 0, 0);
@@ -130,7 +140,6 @@ int main(int argc, char* argv[]) {
                 return 3;
             };
 
-            mq_close (queue);
 
             pthread_join(t3, NULL);
             pthread_join(t2, NULL);
@@ -140,7 +149,6 @@ int main(int argc, char* argv[]) {
             free (buffer_pedido);
             mq_close (queue);
             mq_unlink(MQ_NAME);
-            //kill(getppid(), SIGUSR1);
 
         }
     } else {
@@ -165,7 +173,6 @@ int main(int argc, char* argv[]) {
 
 
             num_comanda++;
-            //kill(getppid(), SIGUSR1);
 
         }   
     }

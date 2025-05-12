@@ -29,7 +29,6 @@ struct mq_attr attributes = {
     .mq_msgsize = sizeof(Comanda),
     .mq_curmsgs = 0
 };                                                      //atributos de la cola
- 
 char *buffer_pedido;                                    //buffer para los pedidos
 
 void plato_listo(int sig){
@@ -123,7 +122,6 @@ int main(int argc, char* argv[]) {
     sem_init(&sem_cocinado, 0, 0);
     sem_init(&sem_emplatado, 0, 0);
  
-
     pid_sala = fork();
     if (pid_sala != 0) {
         pid_cocina = fork();
@@ -131,12 +129,9 @@ int main(int argc, char* argv[]) {
 		/* Proceso padre */
             //Usamos sigaction para gestionar la señal SIGINT con la funcion handle
             signal(SIGINT, handle);
- 
-            //antes de cerrar el programa, se espera a que acaben los procesos hijos
-            waitpid(pid_cocina, NULL,0);
-            waitpid(pid_sala,NULL, 0);
-
-
+            /*antes de cerrar el programa, se espera a que acaben los procesos hijos, en vez de
+             usar los id de los procesos, -1 hace esperar a todos los procesos hijos*/
+            waitpid(-1, NULL,0);
         } else {
             /* Proceso Cocina */
             //Abrimos la cola en modo lectura y guardamos en el buffer
@@ -179,7 +174,6 @@ int main(int argc, char* argv[]) {
         struct sigaction sa_emplatado = {0};
         sa_emplatado.sa_handler = plato_listo;
         sigaction(SIGUSR1, &sa_emplatado, NULL);
-
         //Creamos la cola POSIX
         queue = mq_open(MQ_NAME , O_CREAT | O_WRONLY, 0664 , &attributes);
         printf("[Sala] Inicio de la gestión de comandas...\n");

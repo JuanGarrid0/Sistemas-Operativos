@@ -39,9 +39,9 @@ volatile sig_atomic_t finalizar = 0;
 //Señal que protege la flag global de finalizado
 void sigint_handler(int sig) {
     finalizar = 1;
-    sem_post(&sem_preparado);
+    /*sem_post(&sem_preparado);
     sem_post(&sem_cocinado);
-    sem_post(&sem_emplatado);
+    sem_post(&sem_emplatado);*/
 }
 
 
@@ -57,13 +57,14 @@ int tiempo_aleatorio(int min, int max) {
 
 //Hilo para preparado
 void* preparar_ingredientes(void* args) {
+    ready=0;
     printf("[Preparación] Hilo iniciado.\n");
     char buffer[128];
     strcpy(buffer, (char*)args);
 
-    while (!finalizar) {
+    while (!finalizar && !ready) {
         sem_wait(&sem_preparado);
-        if (finalizar) break;  // Comprobación inmediata post sem_wait
+        //if (finalizar) break;  // Comprobación inmediata post sem_wait
 
         printf("[Preparación] Preparando ingredientes...\n");
         sleep(tiempo_aleatorio(3, 6));
@@ -79,9 +80,9 @@ void* preparar_ingredientes(void* args) {
 
 //Hilo para cocinar
 void* cocinar(void* arg) {
-    while (!finalizar) {
+    while (!finalizar && !ready) {
         sem_wait(&sem_cocinado);
-        if (finalizar) break;  // Comprobación rápida por si la señal llega mientras espera semáforo
+        //if (finalizar) break;  // Comprobación rápida por si la señal llega mientras espera semáforo
         printf("[Cocina] Cocinando plato...\n");
         sleep(tiempo_aleatorio(4, 8));
         printf("[Cocina] Plato cocinado.\n");
@@ -95,9 +96,9 @@ void* cocinar(void* arg) {
 // Hilo para el emplatado
 void* emplatar(void* arg) {
 
-    while (!finalizar) {
+    while (!finalizar && !ready) {
         sem_wait(&sem_emplatado);   
-        if (finalizar) break;                                                                    //Rojo
+        //if (finalizar) break;                                                                    //Rojo
         printf("[Emplatado] Emplatando el plato...\n");
         sleep(tiempo_aleatorio(2, 4));
    
@@ -251,17 +252,16 @@ int main(int argc, char* argv[]) {
 
 
             // Una vez recibido SIGINT, aseguramos que desbloqueamos los hilos si estuvieran esperando semáforos
-            sem_post(&sem_preparado);
-            sem_post(&sem_cocinado);
-            sem_post(&sem_emplatado);
-
+           
             // Esperamos a que los hilos terminen ordenadamente
-            pthread_join(t3, NULL);
-            // printf("[INFO] Hilo Emplatado finalizado.\n");
-            pthread_join(t2, NULL);
-            // printf("[INFO] Hilo Cocinado finalizado.\n");
             pthread_join(t1, NULL);
             // printf("[INFO] Hilo Preparación finalizado.\n");
+            pthread_join(t2, NULL);
+            // printf("[INFO] Hilo Cocinado finalizado.\n");
+            pthread_join(t3, NULL);
+            // printf("[INFO] Hilo Emplatado finalizado.\n");
+            
+       
 
 
             //Al final de cada comanda liberamos el buffer y cerramos cola--> Cerrar y liberar mas arriba si se quiere hacer mas de un pedido cada vez
@@ -325,7 +325,6 @@ int main(int argc, char* argv[]) {
             sleep(tiempo_aleatorio(5, 10));
             printf("[Sala] Recibida comanda de cliente. Solicitando plato de la comanda nº %d a la cocina...\n", num_comanda);
             num_comanda++;
-            ready = 0;
         }
         
         // Cuando finalizar sea activado:

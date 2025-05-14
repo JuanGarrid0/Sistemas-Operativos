@@ -272,6 +272,7 @@ int main(int argc, char* argv[]) {
             sem_destroy(&sem_emplatado);
 
             printf("[Cocina] Recursos liberados y proceso finalizado.\n");
+            kill(getppid(),SIGTERM); //acabamos con el proceso una vez todo ha acabado
             exit(EXIT_SUCCESS);
 
         }

@@ -23,7 +23,6 @@ pid_t pid_sala, pid_cocina;                             //process ids
 sem_t sem_preparado, sem_cocinado, sem_emplatado;       //semaforos
 mqd_t queue;                                            //cola de POSIX
 Comanda pedido;                                         
-int ready=0;
 pthread_t t1, t2, t3;                                   //hilos
 struct mq_attr attributes = {       
     .mq_flags = 0,
@@ -35,13 +34,10 @@ char *buffer_pedido;
 
 //Flag global para finalizar procesos
 volatile sig_atomic_t finalizar = 0;
-
+volatile sig_atomic_t ready = 0;
 //Señal que protege la flag global de finalizado
 void sigint_handler(int sig) {
     finalizar = 1;
-    /*sem_post(&sem_preparado);
-    sem_post(&sem_cocinado);
-    sem_post(&sem_emplatado);*/
 }
 
 
@@ -57,15 +53,13 @@ int tiempo_aleatorio(int min, int max) {
 
 //Hilo para preparado
 void* preparar_ingredientes(void* args) {
-    ready=0;
     printf("[Preparación] Hilo iniciado.\n");
     char buffer[128];
     strcpy(buffer, (char*)args);
 
     while (!finalizar && !ready) {
-        sem_wait(&sem_preparado);
-        //if (finalizar) break;  // Comprobación inmediata post sem_wait
 
+        sem_wait(&sem_preparado);
         printf("[Preparación] Preparando ingredientes...\n");
         sleep(tiempo_aleatorio(3, 6));
         printf("[Preparación] Ingredientes listos.\n");
@@ -82,7 +76,6 @@ void* preparar_ingredientes(void* args) {
 void* cocinar(void* arg) {
     while (!finalizar && !ready) {
         sem_wait(&sem_cocinado);
-        //if (finalizar) break;  // Comprobación rápida por si la señal llega mientras espera semáforo
         printf("[Cocina] Cocinando plato...\n");
         sleep(tiempo_aleatorio(4, 8));
         printf("[Cocina] Plato cocinado.\n");
@@ -98,48 +91,17 @@ void* emplatar(void* arg) {
 
     while (!finalizar && !ready) {
         sem_wait(&sem_emplatado);   
-        //if (finalizar) break;                                                                    //Rojo
         printf("[Emplatado] Emplatando el plato...\n");
         sleep(tiempo_aleatorio(2, 4));
-   
         printf("[Emplatado] Plato listo y emplatado.\n");
-         
-       
-        sem_post(&sem_preparado);                                                                       //Verde
         kill(pid_sala, SIGUSR1);
-
+        sem_post(&sem_preparado);                                                                       //Verde
 
     }
     printf("[Emplatado] Hilo finalizando.\n");
     return NULL;
 }
 
-void handle(int sig){
-    //Esperamos acabar
-    waitpid(pid_cocina, NULL,0);
-    waitpid(pid_sala,NULL, 0);
-    //fin hilos
-    pthread_join(t3, NULL);
-    pthread_join(t2, NULL);
-    pthread_join(t1, NULL);
-
-    //cerramos cola y borramos del sistema
-    mq_close (queue);
-    mq_unlink(MQ_NAME); 
-
-    //destruimos semaforos
-    sem_destroy(&sem_cocinado);
-    sem_destroy(&sem_emplatado);
-    sem_destroy(&sem_preparado);
-
-    //Restauramos la señal
-    signal(SIGINT, SIG_DFL);
-
-
-    exit(0);
-
-   
-}
 
 void* escuchar_teclado(void* arg) {
     while (!finalizar) {
@@ -230,7 +192,7 @@ int main(int argc, char* argv[]) {
             printf("[Cocina] Comienzo de la preparación de platos...\n");
             /*Arrancamos los hilos de cada uno de los procesos uno a uno, y esperamos a que acabe el ultimo para cerrar los hilos,
              de esta forma los pedidos se hacen de uno en uno. Ejemplo: Se prepara, cocina y emplata A, se prepara, cocina y emplata B */
-             if (pthread_create(&t1, NULL, &preparar_ingredientes, buffer_pedido) != 0) {
+            if (pthread_create(&t1, NULL, &preparar_ingredientes, buffer_pedido) != 0) {
                 perror("[Cocina] Error al crear hilo Preparar");
                 exit(EXIT_FAILURE);
             }
@@ -267,6 +229,7 @@ int main(int argc, char* argv[]) {
             //Al final de cada comanda liberamos el buffer y cerramos cola--> Cerrar y liberar mas arriba si se quiere hacer mas de un pedido cada vez
             free(buffer_pedido);
             mq_close (queue);
+            mq_unlink(MQ_NAME);
             sem_destroy(&sem_preparado);
             sem_destroy(&sem_cocinado);
             sem_destroy(&sem_emplatado);

@@ -187,7 +187,7 @@ int main(int argc, char* argv[]) {
             
             // Esperamos señal SIGINT de manera bloqueante
             while (!finalizar) pause();
-            printf("ESTOOOOOOOY");
+            // printf("ESTOOOOOOOY");
             // Una vez capturado SIGINT, enviamos la señal manualmente a los procesos hijos para que terminen sus bucles de trabajo
             kill(pid_cocina, SIGINT);
             kill(pid_sala, SIGINT);
@@ -257,11 +257,11 @@ int main(int argc, char* argv[]) {
 
             // Esperamos a que los hilos terminen ordenadamente
             pthread_join(t3, NULL);
-            printf("[INFO] Hilo Emplatado finalizado.\n");
+            // printf("[INFO] Hilo Emplatado finalizado.\n");
             pthread_join(t2, NULL);
-            printf("[INFO] Hilo Cocinado finalizado.\n");
+            // printf("[INFO] Hilo Cocinado finalizado.\n");
             pthread_join(t1, NULL);
-            printf("[INFO] Hilo Preparación finalizado.\n");
+            // printf("[INFO] Hilo Preparación finalizado.\n");
 
 
             //Al final de cada comanda liberamos el buffer y cerramos cola--> Cerrar y liberar mas arriba si se quiere hacer mas de un pedido cada vez

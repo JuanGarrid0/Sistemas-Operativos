@@ -12,7 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 
-
+#include <termios.h>
 #include "restaurante.h"
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -30,18 +30,19 @@ struct mq_attr attributes = {
     .mq_msgsize = sizeof(Comanda),
     .mq_curmsgs = 0
 };                                                      //atributos de la cola
-char *buffer_pedido;  
+char c;                                                 // entrada desde consola ("P")
+int ascii;                                                //conversion de char a entero
+char *buffer_pedido;                                       //buffer
+pthread_t t_sala_input;                                     //Hilo de sala
 
-//Flag global para finalizar procesos
+
+//Flags globales para finalizar procesos
 volatile sig_atomic_t finalizar = 0;
 volatile sig_atomic_t ready = 0;
 //Señal que protege la flag global de finalizado
 void sigint_handler(int sig) {
     finalizar = 1;
 }
-
-
-//buffer para los pedidos
 
 void plato_listo(int sig){
         ready = 1;
@@ -56,6 +57,7 @@ void* preparar_ingredientes(void* args) {
     printf("[Preparación] Hilo iniciado.\n");
     char buffer[128];
     strcpy(buffer, (char*)args);
+    ready = 0;
 
     while (!finalizar && !ready) {
 
@@ -94,30 +96,36 @@ void* emplatar(void* arg) {
         printf("[Emplatado] Emplatando el plato...\n");
         sleep(tiempo_aleatorio(2, 4));
         printf("[Emplatado] Plato listo y emplatado.\n");
-        kill(pid_sala, SIGUSR1);
+        kill(pid_sala, SIGUSR1);                                //Manda ready = 1 --> plato listo
         sem_post(&sem_preparado);                                                                       //Verde
 
     }
     printf("[Emplatado] Hilo finalizando.\n");
     return NULL;
 }
-
+ 
 
 void* escuchar_teclado(void* arg) {
+    printf("Txirrinulari\n");
     while (!finalizar) {
-        int c = getchar();
-        if (c == 16) {  // ASCII de Ctrl+P
-            struct mq_attr attr;
-            mq_getattr(queue, &attr);
-            if (attr.mq_curmsgs >= attr.mq_maxmsg) {
+        scanf("%c", &c);                //input de terminal
+        ascii = c;                      // convierte a int
+        if (ascii == 112) {  // valor de "p", esta testeado, es 112
+            queue = mq_open(MQ_NAME, O_CREAT | O_WRONLY, 0664, &attributes);
+            mq_getattr(queue, &attributes);
+            if (attributes.mq_curmsgs >= attributes.mq_maxmsg) {
                 printf("[Sala] La sala está saturada, intentelo de nuevo más tarde.\n");
             } else {
-                strcpy(pedido.msg, "Pedido adicional por teclado");
+
+                scanf("%s", buffer_pedido);
+                //char* prueba ="torreznos";
+                strcpy(pedido.msg, buffer_pedido);
+                printf("El pedido que se ha hecho es de %s",pedido.msg);
                 mq_send(queue, (char *)&pedido, sizeof(pedido), 1);
                 printf("[Sala] Pedido añadido desde teclado.\n");
+                mq_close(queue);
             }
         }
-        sleep(100000);
     }
     return NULL;
 }
@@ -174,47 +182,47 @@ int main(int argc, char* argv[]) {
 
             //Abrimos la cola en modo lectura y guardamos en el buffer
             // Abrimos la cola en modo lectura y guardamos en el buffer
-            queue = mq_open(MQ_NAME, O_RDONLY);
-            if (queue == -1) {
-                perror("[Cocina] Error al abrir la cola");
-                exit(EXIT_FAILURE);
-            }
-
-            // Intentamos recibir el pedido
-            if (mq_receive(queue, buffer_pedido, attributes.mq_msgsize, 0) == -1) {
-                perror("[Cocina] Error al recibir pedido");
-            } else {
-                //Comprobamos si hay algun fallo que haga que el dato de la cola no llegue al buffer
-                printf("[Cocina] Pedido recibido: %s\n", buffer_pedido);
-            }
             
-
-            printf("[Cocina] Comienzo de la preparación de platos...\n");
-            /*Arrancamos los hilos de cada uno de los procesos uno a uno, y esperamos a que acabe el ultimo para cerrar los hilos,
-             de esta forma los pedidos se hacen de uno en uno. Ejemplo: Se prepara, cocina y emplata A, se prepara, cocina y emplata B */
-            if (pthread_create(&t1, NULL, &preparar_ingredientes, buffer_pedido) != 0) {
-                perror("[Cocina] Error al crear hilo Preparar");
-                exit(EXIT_FAILURE);
-            }
-            
-            if (pthread_create(&t2, NULL, &cocinar, NULL) != 0) {
-                perror("[Cocina] Error al crear hilo Cocinar");
-                exit(EXIT_FAILURE);
-            }
-            
-            if (pthread_create(&t3, NULL, &emplatar, NULL) != 0) {
-                perror("[Cocina] Error al crear hilo Emplatar");
-                exit(EXIT_FAILURE);
-            }
 
             // Bucle principal de espera a señal de finalización
             while (!finalizar) {
-                pause();  // Esperamos a recibir SIGINT
+                queue = mq_open(MQ_NAME, O_RDONLY);
+                if (queue == -1) {
+                    perror("[Cocina] Error al abrir la cola");
+                    exit(EXIT_FAILURE);
+                }
+
+                // Intentamos recibir el pedido
+                if (mq_receive(queue, buffer_pedido, attributes.mq_msgsize, 0) == -1) {
+                    perror("[Cocina] Error al recibir pedido");
+                } else {
+                    //Comprobamos si hay algun fallo que haga que el dato de la cola no llegue al buffer
+                    printf("[Cocina] Pedido recibido: %s\n", buffer_pedido);
+                }
+                
+
+                printf("[Cocina] Comienzo de la preparación de platos...\n");
+                /*Arrancamos los hilos de cada uno de los procesos uno a uno, y esperamos a que acabe el ultimo para cerrar los hilos,
+                de esta forma los pedidos se hacen de uno en uno. Ejemplo: Se prepara, cocina y emplata A, se prepara, cocina y emplata B */
+                if (pthread_create(&t1, NULL, &preparar_ingredientes, buffer_pedido) != 0) {
+                    perror("[Cocina] Error al crear hilo Preparar");
+                    exit(EXIT_FAILURE);
+                }
+                
+                if (pthread_create(&t2, NULL, &cocinar, NULL) != 0) {
+                    perror("[Cocina] Error al crear hilo Cocinar");
+                    exit(EXIT_FAILURE);
+                }
+                
+                if (pthread_create(&t3, NULL, &emplatar, NULL) != 0) {
+                    perror("[Cocina] Error al crear hilo Emplatar");
+                    exit(EXIT_FAILURE);
+                }           
             }
 
 
             // Una vez recibido SIGINT, aseguramos que desbloqueamos los hilos si estuvieran esperando semáforos
-           
+ 
             // Esperamos a que los hilos terminen ordenadamente
             pthread_join(t1, NULL);
             // printf("[INFO] Hilo Preparación finalizado.\n");
@@ -263,10 +271,11 @@ int main(int argc, char* argv[]) {
         }
 
         // Arrancamos el hilo para escuchar el teclado
-        pthread_t t_sala_input;
-        if (pthread_create(&t_sala_input, NULL, escuchar_teclado, NULL) != 0) {
+        if (pthread_create(&t_sala_input, NULL, &escuchar_teclado, NULL) != 0) {
             perror("[Sala] Error al crear hilo teclado");
             exit(EXIT_FAILURE);
+        }else{
+            printf("Tamo activo\n");
         }
 
         printf("[Sala] Inicio de la gestión de comandas...\n");
@@ -291,8 +300,8 @@ int main(int argc, char* argv[]) {
         }
         
         // Cuando finalizar sea activado:
+        printf("Toy cansado jefe\n");
         pthread_join(t_sala_input, NULL);
-        mq_close(queue);
         
         printf("[Sala] Proceso finalizando y recursos liberados.\n");
         exit(EXIT_SUCCESS);

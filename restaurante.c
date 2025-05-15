@@ -97,7 +97,7 @@ void* emplatar(void* arg) {
         sleep(tiempo_aleatorio(2, 4));
         printf("[Emplatado] Plato listo y emplatado.\n");
         kill(pid_sala, SIGUSR1);                                //Manda ready = 1 --> plato listo
-        sem_post(&sem_preparado);                                                                       //Verde
+        //sem_post(&sem_preparado);                                                                       //Verde
 
     }
     printf("[Emplatado] Hilo finalizando.\n");
@@ -120,7 +120,7 @@ void* escuchar_teclado(void* arg) {
                 scanf("%s", buffer_pedido);
                 //char* prueba ="torreznos";
                 strcpy(pedido.msg, buffer_pedido);
-                printf("El pedido que se ha hecho es de %s",pedido.msg);
+                printf("El pedido que se ha hecho es de %s\n",pedido.msg);
                 mq_send(queue, (char *)&pedido, sizeof(pedido), 1);
                 printf("[Sala] Pedido añadido desde teclado.\n");
                 mq_close(queue);
@@ -289,10 +289,17 @@ int main(int argc, char* argv[]) {
  
 	    int num_comanda = 0;
         //Para comprobar el numero de pedidos en cola en t0, inicia en 0, luego llega la comanda
-        mq_getattr (queue, &attributes);                                //borrable
-        printf ("%ld pedidos en cocina.\n", attributes.mq_curmsgs);      //borrable, saca numero de mensajes en cola
+             
         while (!finalizar) {
             while (!ready && !finalizar) pause();
+            mq_getattr (queue, &attributes);                                 
+            printf ("%ld pedidos en cocina.\n", attributes.mq_curmsgs);  
+            if (attributes.mq_curmsgs > 0){ 
+                sem_post(&sem_preparado);
+                continue;
+            }else{
+                pause();
+            }
             if (finalizar) break;
             sleep(tiempo_aleatorio(5, 10));
             printf("[Sala] Recibida comanda de cliente. Solicitando plato de la comanda nº %d a la cocina...\n", num_comanda);

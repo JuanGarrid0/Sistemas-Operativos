@@ -41,6 +41,7 @@ char* buffer_pedido;
 //Flags globales para finalizar procesos
 volatile sig_atomic_t finalizar = 0;
 volatile sig_atomic_t ready = 0;
+volatile sig_atomic_t exitLoop = 0;
 //Señal que protege la flag global de finalizado
 void sigint_handler(int sig) {
     finalizar = 1;
@@ -57,30 +58,35 @@ int tiempo_aleatorio(int min, int max) {
 //Hilo para preparado
 void* preparar_ingredientes(void* args) {
 
-    printf("[Preparación] Hilo iniciado.\n");
+    //printf("[Preparación] Hilo iniciado.\n");
+    //Abrimos cola en modo lectura
     queue = mq_open(MQ_NAME, O_RDONLY);
     if (queue == -1) {
         perror("[Cocina] Error al abrir la cola");
         exit(EXIT_FAILURE);
     }            
 
-    while (!finalizar /*&& !ready*/) {
+    while (!finalizar && !ready) {  //ARREGLAR--> ESPERA DENTRODEL BUCLE
         sem_wait(sem_preparado);
-        if (mq_receive(queue, (char*)&recibido.msg, attributes.mq_msgsize, 0) == -1) {
-            perror("[Cocina] Error al recibir pedido");
-        } else {
-            //Comprobamos si hay algun fallo que haga que el dato de la cola no llegue al buffer
-            printf("[Cocina] Pedido recibido: %s\n", recibido.msg);
+        if(finalizar==1) {
+            break;
+        }else{
+            if (mq_receive(queue, (char*)&recibido.msg, attributes.mq_msgsize, 0) == -1) {//Recibimos pedido mas antiguo  cola
+                perror("[Cocina] Error al recibir pedido");
+            } else {
+                //Comprobamos si hay algun fallo que haga que el dato de la cola no llegue al buffer
+                printf("[Cocina] Pedido recibido: %s\n", recibido.msg);
+            }
+
+            printf("[Preparación] Preparando ingredientes...\n");
+            sleep(tiempo_aleatorio(3, 6));
+            printf("[Preparación] Ingredientes listos.\n");
+
+            sem_post(sem_cocinado); //Verde
         }
-
-        printf("[Preparación] Preparando ingredientes...\n");
-        sleep(tiempo_aleatorio(3, 6));
-        printf("[Preparación] Ingredientes listos.\n");
-
-        sem_post(sem_cocinado);
     }
-    mq_close(queue);
-    printf("[Preparación] Hilo finalizando.\n");
+    mq_close(queue); //Cerramos cola
+    //printf("[Preparación] Hilo finalizando.\n");
     return NULL;
 }
 
@@ -89,12 +95,14 @@ void* preparar_ingredientes(void* args) {
 void* cocinar(void* arg) {
     while (!finalizar && !ready) {
         sem_wait(sem_cocinado);
+      
+        if (exitLoop ==1  ) break;
         printf("[Cocina] Cocinando plato...\n");
         sleep(tiempo_aleatorio(4, 8));
         printf("[Cocina] Plato cocinado.\n");
-        sem_post(sem_emplatado);
+        sem_post(sem_emplatado);        //verde
     }
-    printf("[Cocina] Hilo finalizando.\n");
+    //printf("[Cocina] Hilo finalizando.\n");
     return NULL;
 }
 
@@ -104,13 +112,13 @@ void* emplatar(void* arg) {
 
     while (!finalizar && !ready) {
         sem_wait(sem_emplatado);   
-
+        if (exitLoop ==1  ) break;;
         printf("[Emplatado] Emplatando el plato...\n");
         sleep(tiempo_aleatorio(2, 4));
         printf("[Emplatado] Plato listo y emplatado.\n");
         kill(pid_sala, SIGUSR1);                                //Manda ready = 1 --> plato listo
     }
-    printf("[Emplatado] Hilo finalizando.\n");
+    //printf("[Emplatado] Hilo finalizando.\n");
     return NULL;
 }
  
@@ -147,7 +155,9 @@ void* escuchar_teclado(void* arg) {
 
 
 int main(int argc, char* argv[]) {
-        
+    sem_preparado = sem_open("/sem_preparado", O_CREAT, 0666, 1);
+    sem_cocinado = sem_open("/sem_cocinado", O_CREAT, 0666, 0);
+    sem_emplatado = sem_open("/sem_emplatado", O_CREAT, 0666, 0);
 
  
     pid_sala = fork();
@@ -183,14 +193,18 @@ int main(int argc, char* argv[]) {
 
         } else {
             /* Proceso Cocina */
-            sem_preparado = sem_open("/sem_preparado", O_CREAT, 0666, 1);
-            sem_cocinado = sem_open("/sem_cocinado", O_CREAT, 0666, 0);
-            sem_emplatado = sem_open("/sem_emplatado", O_CREAT, 0666, 0);
+            
             struct sigaction sa_cocina = {0};
             sa_cocina.sa_handler = sigint_handler;
             sigemptyset(&sa_cocina.sa_mask);
             sa_cocina.sa_flags = 0;
             sigaction(SIGINT, &sa_cocina, NULL);
+
+            struct sigaction sa_emplatado = {0};
+            sa_emplatado.sa_handler = plato_listo;
+            sigemptyset(&sa_emplatado.sa_mask);  // Por seguridad, aunque no es tan crítico aquí
+            sa_emplatado.sa_flags = 0;
+            sigaction(SIGUSR1, &sa_emplatado, NULL);
 
             //Abrimos la cola en modo lectura y guardamos en el buffer
             // Abrimos la cola en modo lectura y guardamos en el buffer
@@ -218,25 +232,22 @@ int main(int argc, char* argv[]) {
             }
 
             // Una vez recibido SIGINT, aseguramos que desbloqueamos los hilos si estuvieran esperando semáforos
-
-
-            //ARREGLAR extra loop
-            //sleep(5);
-            //sem_post(sem_preparado);  
-            //sem_post(sem_cocinado);   
-            //sem_post(sem_emplatado);   
-            //printf("Se va por cocina  I");
+            
 
             // Esperamos a que los hilos terminen ordenadamente
-            //pthread_join(t1, NULL);
-            //pthread_join(t2, NULL);
-            //pthread_join(t3, NULL);
-            
-            //printf("Se va por cocina  II");
+            sem_post(sem_preparado);  
+            pthread_join(t1, NULL);
 
-            //Al final de cada comanda liberamos el buffer y cerramos cola--> Cerrar y liberar mas arriba si se quiere hacer mas de un pedido cada vez
-            mq_close (queue);
+            exitLoop = 1;
+            sem_post(sem_cocinado);   
+            pthread_join(t2, NULL);
+
+            sem_post(sem_emplatado);  
+            pthread_join(t3, NULL);
+ 
+            mq_close(queue);
             mq_unlink(MQ_NAME);
+            //Al final de cada comanda liberamos el buffer y cerramos cola--> Cerrar y liberar mas arriba si se quiere hacer mas de un pedido cada vez
 
             sem_close(sem_preparado);
             sem_close(sem_cocinado);
@@ -314,7 +325,6 @@ int main(int argc, char* argv[]) {
         
         // Cuando finalizar sea activado:
         pthread_join(t_sala_input, NULL);
-        printf("Se va por sala");
         printf("[Sala] Proceso finalizando y recursos liberados.\n");
         exit(EXIT_SUCCESS);
     }  

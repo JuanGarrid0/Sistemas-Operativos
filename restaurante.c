@@ -41,7 +41,9 @@ char* buffer_pedido;
 //Flags globales para finalizar procesos
 volatile sig_atomic_t finalizar = 0;
 volatile sig_atomic_t ready = 0;
-volatile sig_atomic_t exitLoop = 0;
+volatile sig_atomic_t exitLoopCocinar = 0;
+volatile sig_atomic_t exitLoopEmplatar = 0;
+
 //Señal que protege la flag global de finalizado
 void sigint_handler(int sig) {
     finalizar = 1;
@@ -96,7 +98,7 @@ void* cocinar(void* arg) {
     while (!finalizar && !ready) {
         sem_wait(sem_cocinado);
       
-        if (exitLoop ==1  ) break;
+        if (exitLoopCocinar == 1  ) break;
         printf("[Cocina] Cocinando plato...\n");
         sleep(tiempo_aleatorio(4, 8));
         printf("[Cocina] Plato cocinado.\n");
@@ -108,17 +110,17 @@ void* cocinar(void* arg) {
 
 
 // Hilo para el emplatado
-void* emplatar(void* arg) {
+void* emplatar(void* arg) { //toma cmom exit loop el last loop
 
     while (!finalizar && !ready) {
         sem_wait(sem_emplatado);   
-        if (exitLoop ==1  ) break;;
+        if (exitLoopEmplatar ==1   ) break;
         printf("[Emplatado] Emplatando el plato...\n");
         sleep(tiempo_aleatorio(2, 4));
         printf("[Emplatado] Plato listo y emplatado.\n");
         kill(pid_sala, SIGUSR1);                                //Manda ready = 1 --> plato listo
     }
-    //printf("[Emplatado] Hilo finalizando.\n");
+    printf("[Emplatado] Hilo finalizando.\n");
     return NULL;
 }
  
@@ -238,10 +240,11 @@ int main(int argc, char* argv[]) {
             sem_post(sem_preparado);  
             pthread_join(t1, NULL);
 
-            exitLoop = 1;
+            exitLoopCocinar = 1;
             sem_post(sem_cocinado);   
             pthread_join(t2, NULL);
 
+            exitLoopEmplatar = 1;
             sem_post(sem_emplatado);  
             pthread_join(t3, NULL);
  
